@@ -230,3 +230,281 @@ async function main() {
 
 
 main();
+
+// this code for refernce whenn we use langGraph 
+
+// import * as z from "zod";
+// import { tool } from "@langchain/core/tools";
+// import { ChatGroq } from "@langchain/groq";
+// import { StateGraph, Annotation, MemorySaver } from "@langchain/langgraph";
+// import { ToolNode } from "@langchain/langgraph/prebuilt";
+// import readline from "node:readline/promises";
+
+// // Define State
+// const StateAnnotation = Annotation.Root({
+//   messages: Annotation({
+//     reducer: (x, y) => x.concat(y),
+//   }),
+// });
+
+// const llm = new ChatGroq({
+//   model: "llama3-70b-8192",
+//   temperature: 0,
+// });
+
+// const r1 = readline.createInterface({
+//   input: process.stdin,
+//   output: process.stdout,
+// });
+
+// const gmailEmails = {
+//   messages: [
+//     {
+//       id: "18c3f2a1b5d6e789",
+//       from: "john.doe@example.com",
+//       subject: "Refund Request - JavaScript Course",
+//       snippet: "Hi, I purchased your JavaScript masterclass course last week but I would like to request a refund...",
+//     },
+//     {
+//       id: "18c3e8f9a2c4b567",
+//       from: "sarah.williams@example.com",
+//       subject: "Order Confirmation - React Course",
+//       snippet: "Thank you for your recent purchase! Your order #CR-2024-1543 has been confirmed...",
+//     },
+//     {
+//       id: "18c3d5b8e1f3a456",
+//       from: "mike.chen@example.com",
+//       subject: "Course Refund Request - Order #CR-2024-1538",
+//       snippet: "Hello Codersgyan team, I need to request a refund for the Full Stack course I bought 3 days ago...",
+//     },
+//     {
+//       id: "18c3c2a7d0e2b345",
+//       from: "newsletter@codersgyan.com",
+//       subject: "🚀 New Course Launch - Node.js Microservices",
+//       snippet: "Weekly newsletter: New course announcement!...",
+//     },
+//     {
+//       id: "18c3b1c6f9d1a234",
+//       from: "emma.taylor@example.com",
+//       subject: "Question about Python Course Content",
+//       snippet: "Hi there! I have a question about the Python course. Can you tell me if it covers Django framework?",
+//     },
+//   ],
+// };
+
+// // Define Tools
+// const getEmails = tool(
+//   () => {
+//     return JSON.stringify(gmailEmails);
+//   },
+//   {
+//     name: "get_emails",
+//     description: "Get all emails from inbox",
+//   }
+// );
+
+// const refund = tool(
+//   ({ emails }) => {
+//     return `✅ Refunds processed successfully for: ${emails.join(", ")}`;
+//   },
+//   {
+//     name: "refund",
+//     description: "Process refunds for given email addresses",
+//     schema: z.object({
+//       emails: z.array(z.string()).describe("List of email addresses to refund"),
+//     }),
+//   }
+// );
+
+// // Bind tools to LLM
+// const tools = [getEmails, refund];
+// const llmWithTools = llm.bindTools(tools);
+
+// // Define Nodes
+// async function callModel(state) {
+//   const response = await llmWithTools.invoke(state.messages);
+//   return { messages: [response] };
+// }
+
+// const toolNode = new ToolNode(tools);
+
+// // Define conditional edge function
+// function shouldContinue(state) {
+//   const lastMessage = state.messages[state.messages.length - 1];
+  
+//   // If there are tool calls, continue to tools
+//   if (lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+//     // Check if it's a refund call - interrupt for human approval
+//     const hasRefund = lastMessage.tool_calls.some(
+//       (call) => call.name === "refund"
+//     );
+    
+//     if (hasRefund) {
+//       return "human"; // Interrupt for human approval
+//     }
+//     return "tools";
+//   }
+  
+//   // Otherwise, end
+//   return "end";
+// }
+
+// // Human approval node
+// async function humanApproval(state) {
+//   const lastMessage = state.messages[state.messages.length - 1];
+//   const refundCall = lastMessage.tool_calls.find((call) => call.name === "refund");
+  
+//   console.log("\n" + "=".repeat(60));
+//   console.log("⚠️  REFUND APPROVAL REQUIRED");
+//   console.log("=".repeat(60));
+//   console.log("\n📧 Emails to refund:");
+//   refundCall.args.emails.forEach((email, i) => {
+//     console.log(`   ${i + 1}. ${email}`);
+//   });
+//   console.log("\n🔹 Choose:\n   1. Approve\n   2. Reject\n");
+  
+//   const decision = await r1.question("Your decision: ");
+  
+//   if (decision === "1") {
+//     console.log("\n✅ Approved! Processing refund...\n");
+//     return { messages: [] }; // Continue to tools
+//   } else {
+//     console.log("\n❌ Rejected! Refund cancelled.\n");
+//     // Remove the tool call to prevent execution
+//     lastMessage.tool_calls = [];
+//     return { messages: [] };
+//   }
+// }
+
+// // Build the Graph
+// const workflow = new StateGraph(StateAnnotation)
+//   .addNode("agent", callModel)
+//   .addNode("tools", toolNode)
+//   .addNode("human", humanApproval)
+//   .addEdge("__start__", "agent")
+//   .addConditionalEdges("agent", shouldContinue, {
+//     tools: "tools",
+//     human: "human",
+//     end: "__end__",
+//   })
+//   .addEdge("tools", "agent")
+//   .addEdge("human", "tools");
+
+// // Compile with checkpointer
+// const checkpointer = new MemorySaver();
+// const app = workflow.compile({ checkpointer });
+
+// // Main function
+// async function main() {
+//   console.log("🤖 Email Refund Agent Started!");
+//   console.log("Try: 'Process refunds for all refund requests'\n");
+
+//   const config = { configurable: { thread_id: "1" } };
+
+//   while (true) {
+//     const userInput = await r1.question("You: ");
+
+//     if (userInput.toLowerCase() === "exit") {
+//       console.log("Goodbye!");
+//       r1.close();
+//       process.exit(0);
+//     }
+
+//     const result = await app.invoke(
+//       {
+//         messages: [{ role: "user", content: userInput }],
+//       },
+//       config
+//     );
+
+//     const lastMessage = result.messages[result.messages.length - 1];
+//     console.log("\n🤖 Assistant:", lastMessage.content, "\n");
+//   }
+// }
+
+// main().catch(console.error);
+// ```
+
+
+
+//// Step-by-step execution:
+
+//  1️⃣ AGENT decides to call refund
+// agent → shouldContinue() checks:
+//   ├─ Has tool_calls? ✅ YES (refund)
+//   ├─ Is it refund? ✅ YES
+//   └─ return "human" ← Routes to HUMAN node
+
+// // 2️⃣ HUMAN node executes
+// human → Shows approval UI
+//   ├─ User types: 1 (approve)
+//   └─ return { messages: [] } ← Empty messages, just continues flow
+
+// // 3️⃣ After HUMAN, graph follows the edge
+// workflow.addEdge("human", "tools") ← This edge is pre-defined!
+//   └─ Goes to TOOLS node (not because of shouldContinue)
+
+// // 4️⃣ TOOLS executes the refund
+// tools → Executes refund tool
+//   └─ Returns refund result
+
+// // 5️⃣ After TOOLS, graph follows the edge
+// workflow.addEdge("tools", "agent") ← Back to AGENT
+//   └─ Goes to AGENT node
+
+// // 6️⃣ AGENT sees refund result, no more tools needed
+// agent → shouldContinue() checks:
+//   ├─ Has tool_calls? ❌ NO
+//   └─ return "end" ← Finishes!
+// ```
+
+// ## 📊 Visual Flow Diagram
+// ```
+//          ┌─────────────────────────────────────────┐
+//          │         AGENT (refund needed)           │
+//          └──────────────────┬──────────────────────┘
+//                             │
+//                     ┌───────▼────────┐
+//                     │ shouldContinue │
+//                     │  hasRefund?    │
+//                     │     ✅ YES     │
+//                     │ return "human" │
+//                     └───────┬────────┘
+//                             │
+//          ┌──────────────────▼──────────────────────┐
+//          │           HUMAN NODE                    │
+//          │  Shows: Approve/Reject?                 │
+//          │  User: 1 (approve)                      │
+//          │  return { messages: [] }                │
+//          └──────────────────┬──────────────────────┘
+//                             │
+//                 ┌───────────▼───────────┐
+//                 │ .addEdge("human",     │ ← Pre-defined edge!
+//                 │          "tools")     │    NOT from shouldContinue
+//                 └───────────┬───────────┘
+//                             │
+//          ┌──────────────────▼──────────────────────┐
+//          │           TOOLS NODE                    │
+//          │  Executes: refund(emails=[...])         │
+//          │  Returns: "Refunds processed!"          │
+//          └──────────────────┬──────────────────────┘
+//                             │
+//                 ┌───────────▼───────────┐
+//                 │ .addEdge("tools",     │ ← Pre-defined edge!
+//                 │          "agent")     │
+//                 └───────────┬───────────┘
+//                             │
+//          ┌──────────────────▼──────────────────────┐
+//          │         AGENT (has refund result)       │
+//          └──────────────────┬──────────────────────┘
+//                             │
+//                     ┌───────▼────────┐
+//                     │ shouldContinue │
+//                     │  Has tools?    │
+//                     │     ❌ NO      │
+//                     │ return "end"   │
+//                     └───────┬────────┘
+//                             │
+//          ┌──────────────────▼──────────────────────┐
+//          │                 END                     │
+//          └─────────────────────────────────────────┘
